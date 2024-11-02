@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  user_microservice:
+    build:
+      context: ./user_microservice/
+    # env_file: --gitignore, used in dev!
+    #   - env/user_microservice_secrets.env
+    #   - env/python_db.env
+    #   - env/general.env
+    environment:
+      - USER_MICROSERVICE_PREFIX=${USER_MICROSERVICE_PREFIX}
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL_ALEMBIC=${DATABASE_URL_ALEMBIC}
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=${PORT}
+    ports:
+      - "8081:8081"
+      # - "50051:50051"
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+  # TODO: other microservices
+
+  db:
+    image: postgres:15.1
+    restart: always
+    user: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # env_file:
+    #   - env/db.env
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  cache:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping" ]
+      interval: 5s
+      timeout: 1s
+      retries: 3
+
+  nginx:
+    image: nginx:latest
+    build: ./nginx
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      # - ./nginx/ssl:/etc/nginx/ssl  <-- protocol safety goes to play roblox
+    depends_on:
+      - user_microservice
+    ports:
+      - "80:80"
+      # - "443:443"  <-- protocol safety goes to play roblox
+
+volumes:
+  redis-data:
+  db-data:

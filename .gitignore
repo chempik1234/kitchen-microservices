@@ -1,0 +1,4 @@
+/.venv/
+/env/
+/default_db.db
+/.idea/
