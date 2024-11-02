@@ -2,8 +2,7 @@ version: '3.8'
 
 services:
   user_microservice:
-    build:
-      context: ./user_microservice/
+    image: ghcr.io/chempik1234/kitchen-microservices_user_microservice
     # env_file: --gitignore, used in dev!
     #   - env/user_microservice_secrets.env
     #   - env/python_db.env

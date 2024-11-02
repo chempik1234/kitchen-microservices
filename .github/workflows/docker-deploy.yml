@@ -1,0 +1,56 @@
+name: Docker
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches: [ "master" ]
+
+# env:
+#   REGISTRY: ghcr.io
+#   IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+
+  build:
+      name: Build
+      runs-on: ubuntu-latest
+
+      steps:
+      - uses: actions/checkout@v3
+      - name: Login
+        run: |
+          echo ${{ secrets.PAT }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Build and Publish
+        run: |
+          docker build . --tag ${{ env.DOCKER_TAG }}
+          docker push ${{ env.DOCKER_TAG }}
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+
+    if: github.event_name != 'pull_request'
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: install ssh keys
+      # check this thread to understand why its needed:
+      # <https://stackoverflow.com/a/70447517>
+      run: |
+        install -m 600 -D /dev/null ~/.ssh/id_rsa
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.SSH_HOST }} > ~/.ssh/known_hosts
+    - name: create docker compose config
+      run: |
+        cat docker-compose.yml | envsubst > docker-compose-secret.yml
+    - name: copy docker compose config
+      run: scp docker-compose-secret.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:docker-compose.yml
+    - name: connect and pull
+      run: ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "docker-compose pull && docker-compose up -d && exit"
+    - name: cleanup config
+      if: always()
+      run: ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "rm docker-compose.yml"
+    - name: cleanup keys
+      if: always()
+      run: rm -rf ~/.ssh docker-compose-secret.yml
